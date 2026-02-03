@@ -116,6 +116,12 @@ pub struct App {
 
 pub type Result = color_eyre::Result<()>;
 
+impl Default for App {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
 impl App {
     pub fn new() -> Self {
         Self {
@@ -181,8 +187,8 @@ impl App {
         loop {
             terminal.draw(|frame| self.draw(frame))?;
 
-            if let Event::Key(key) = event::read()? {
-                if key.kind == KeyEventKind::Press {
+            if let Event::Key(key) = event::read()?
+                && key.kind == KeyEventKind::Press {
                     let shift_pressed = key.modifiers.contains(KeyModifiers::SHIFT);
                     match key.code {
                         KeyCode::Char('q') | KeyCode::Esc => return Ok(()),
@@ -200,7 +206,7 @@ impl App {
                             };
                             self.data[r][col] = 0.into();
                         }
-                        KeyCode::Char(c) if c.is_digit(10) => {
+                        KeyCode::Char(c) if c.is_ascii_digit() => {
                             let Some((r, col)) = self.state.selected_cell() else {
                                 continue;
                             };
@@ -209,7 +215,6 @@ impl App {
                         _ => {}
                     }
                 }
-            }
         }
     }
 
@@ -258,7 +263,7 @@ impl App {
             } else {
                 base_style
             };
-            data.into_iter()
+            data.iter()
                 .enumerate()
                 .map(|(col, content)| {
                     let mut text = Text::from(format!("{content}"));

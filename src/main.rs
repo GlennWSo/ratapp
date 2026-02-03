@@ -1,18 +1,3 @@
-//! # [Ratatui] Table example
-//!
-//! The latest version of this example is available in the [examples] folder in the repository.
-//!
-//! Please note that the examples are designed to be run against the `main` branch of the Github
-//! repository. This means that you may not be able to compile with the latest release version on
-//! crates.io, or the one that you have installed locally.
-//!
-//! See the [examples readme] for more information on finding examples that match the version of the
-//! library you are using.
-//!
-//! [Ratatui]: https://github.com/ratatui/ratatui
-//! [examples]: https://github.com/ratatui/ratatui/blob/main/examples
-//! [examples readme]: https://github.com/ratatui/ratatui/blob/main/examples/README.md
-
 use std::{fmt::Display, num::NonZeroU8};
 
 use color_eyre::Result;
@@ -237,14 +222,26 @@ impl App {
     }
 
     fn draw(&mut self, frame: &mut Frame) {
-        let vertical = &Layout::vertical([Constraint::Min(5), Constraint::Length(4)]);
-        let rects = vertical.split(frame.area());
+        let vertical = Layout::vertical([
+            Constraint::Fill(1),
+            Constraint::Length(11),
+            Constraint::Fill(1),
+        ]);
+        let vertical_areas = vertical.split(frame.area());
+        let grid_row = Layout::horizontal([
+            Constraint::Fill(1),
+            Constraint::Length(3 * 9),
+            Constraint::Fill(1),
+        ])
+        .vertical_margin(1)
+        .split(vertical_areas[1]);
 
         self.set_colors();
 
-        self.render_table(frame, rects[0]);
-        self.render_scrollbar(frame, rects[0]);
-        self.render_footer(frame, rects[1]);
+        self.render_header(frame, vertical_areas[0]);
+        self.render_table(frame, grid_row[1]);
+        // self.render_scrollbar(frame, rects[0]);
+        self.render_footer(frame, vertical_areas[2]);
     }
 
     fn render_table(&mut self, frame: &mut Frame, area: Rect) {
@@ -265,18 +262,36 @@ impl App {
             .collect::<Row>()
             .style(header_style)
             .height(1);
-        let rows = self.items.iter().enumerate().map(|(i, data)| {
-            let color = match i % 2 {
+        let rows = self.items.iter().enumerate().map(|(r, data)| {
+            let color = match r % 2 {
                 0 => self.colors.normal_row_color,
                 _ => self.colors.alt_row_color,
             };
-            let item = data.ref_array();
-            let row = data.row;
-            row.into_iter()
-                .map(|content| Cell::from(Text::from(format!("\n{content}\n")).centered()))
+            let base_style = Style::new().fg(self.colors.row_fg).bg(color);
+            let style = if (r + 1) % 3 == 0 && (r + 1) < 9 {
+                base_style.add_modifier(Modifier::UNDERLINED)
+            } else {
+                base_style
+            };
+            data.row
+                .into_iter()
+                .enumerate()
+                .map(|(col, content)| {
+                    let mut text = Text::from(format!("{content}"));
+                    if (col + 1) % 3 == 0 && (col + 1) < 9 {
+                        text.push_span("|");
+                        text = text.right_aligned();
+                    } else {
+                        text = text.centered();
+                    }
+                    // if floor3 {
+                    //     text.push_line("___");
+                    // }
+                    Cell::from(text)
+                })
                 .collect::<Row>()
-                .style(Style::new().fg(self.colors.row_fg).bg(color))
-                .height(3)
+                .style(style)
+                .height(1)
         });
         let bar = " █ ";
         let t = Table::new(
@@ -297,7 +312,7 @@ impl App {
                 Constraint::Length(3),
             ],
         )
-        .header(header)
+        // .header(header)
         .row_highlight_style(selected_row_style)
         .column_highlight_style(selected_col_style)
         .cell_highlight_style(selected_cell_style)
@@ -326,6 +341,23 @@ impl App {
         );
     }
 
+    fn render_header(&self, frame: &mut Frame, area: Rect) {
+        let header_style = Style::default()
+            .fg(self.colors.header_fg)
+            .bg(self.colors.header_bg);
+        let lay = Layout::vertical([
+            Constraint::Fill(3),
+            Constraint::Length(1),
+            Constraint::Max(2),
+        ])
+        .split(area);
+        frame.render_widget(
+            Paragraph::new("Soduku")
+                .style(header_style.add_modifier(Modifier::BOLD))
+                .centered(),
+            lay[1],
+        );
+    }
     fn render_footer(&self, frame: &mut Frame, area: Rect) {
         let info_footer = Paragraph::new(Text::from_iter(INFO_TEXT))
             .style(

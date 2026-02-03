@@ -1,8 +1,4 @@
-use std::{
-    fmt::Display,
-    num::NonZeroU8,
-    ops::{Deref, DerefMut},
-};
+mod soduko;
 
 use crossterm::event::KeyModifiers;
 use ratatui::{
@@ -17,6 +13,8 @@ use ratatui::{
     },
 };
 use style::palette::tailwind;
+
+use crate::soduko::BoardState;
 
 const PALETTES: [tailwind::Palette; 4] = [
     tailwind::BLUE,
@@ -61,51 +59,7 @@ impl TableColors {
     }
 }
 
-#[derive(Default, Debug, Clone, Copy)]
-struct CellData(Option<NonZeroU8>);
-
-impl From<u8> for CellData {
-    fn from(value: u8) -> Self {
-        match value {
-            0 => Self(None),
-            v @ 1..=9 => Self(NonZeroU8::new(v)),
-            10.. => panic!("max value in soduku is 9"),
-        }
-    }
-}
-
-impl Display for CellData {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        match self.0 {
-            Some(v) => write!(f, "{}", v),
-            None => write!(f, "·"),
-        }
-    }
-}
-
-type SodukoRow = [CellData; 9];
-
-// struct Data {
-//     row: SodukoRow,
-// }
-
-#[derive(Default, Debug, Clone)]
-struct SodukoData([SodukoRow; 9]);
-
-impl Deref for SodukoData {
-    type Target = [SodukoRow; 9];
-
-    fn deref(&self) -> &Self::Target {
-        &self.0
-    }
-}
-
-impl DerefMut for SodukoData {
-    fn deref_mut(&mut self) -> &mut Self::Target {
-        &mut self.0
-    }
-}
-
+type SodukoData = BoardState;
 pub struct App {
     state: TableState,
     data: SodukoData,
@@ -135,7 +89,7 @@ impl App {
     pub fn next_row(&mut self) {
         let i = match self.state.selected() {
             Some(i) => {
-                if i >= self.data.len() - 1 {
+                if i >= 9 - 1 {
                     0
                 } else {
                     i + 1
@@ -151,7 +105,7 @@ impl App {
         let i = match self.state.selected() {
             Some(i) => {
                 if i == 0 {
-                    self.data.len() - 1
+                    9 - 1
                 } else {
                     i - 1
                 }
@@ -188,33 +142,36 @@ impl App {
             terminal.draw(|frame| self.draw(frame))?;
 
             if let Event::Key(key) = event::read()?
-                && key.kind == KeyEventKind::Press {
-                    let shift_pressed = key.modifiers.contains(KeyModifiers::SHIFT);
-                    match key.code {
-                        KeyCode::Char('q') | KeyCode::Esc => return Ok(()),
-                        KeyCode::Char('j') | KeyCode::Down => self.next_row(),
-                        KeyCode::Char('k') | KeyCode::Up => self.previous_row(),
-                        KeyCode::Char('l') | KeyCode::Right if shift_pressed => self.next_color(),
-                        KeyCode::Char('h') | KeyCode::Left if shift_pressed => {
-                            self.previous_color();
-                        }
-                        KeyCode::Char('l') | KeyCode::Right => self.next_column(),
-                        KeyCode::Char('h') | KeyCode::Left => self.previous_column(),
-                        KeyCode::Backspace | KeyCode::Delete => {
-                            let Some((r, col)) = self.state.selected_cell() else {
-                                continue;
-                            };
-                            self.data[r][col] = 0.into();
-                        }
-                        KeyCode::Char(c) if c.is_ascii_digit() => {
-                            let Some((r, col)) = self.state.selected_cell() else {
-                                continue;
-                            };
-                            self.data[r][col] = c.to_digit(10).map(|d| d as u8).unwrap().into();
-                        }
-                        _ => {}
+                && key.kind == KeyEventKind::Press
+            {
+                let shift_pressed = key.modifiers.contains(KeyModifiers::SHIFT);
+                match key.code {
+                    KeyCode::Char('q') | KeyCode::Esc => return Ok(()),
+                    KeyCode::Char('j') | KeyCode::Down => self.next_row(),
+                    KeyCode::Char('k') | KeyCode::Up => self.previous_row(),
+                    KeyCode::Char('l') | KeyCode::Right if shift_pressed => self.next_color(),
+                    KeyCode::Char('h') | KeyCode::Left if shift_pressed => {
+                        self.previous_color();
                     }
+                    KeyCode::Char('l') | KeyCode::Right => self.next_column(),
+                    KeyCode::Char('h') | KeyCode::Left => self.previous_column(),
+                    KeyCode::Backspace | KeyCode::Delete => {
+                        let Some((r, col)) = self.state.selected_cell() else {
+                            continue;
+                        };
+                        self.data.set(r as u8, col as u8, 0.into());
+                    }
+                    KeyCode::Char(c) if c.is_ascii_digit() => {
+                        let Some((r, col)) = self.state.selected_cell() else {
+                            continue;
+                        };
+                        let d = c.to_digit(10).unwrap() as u8;
+                        self.data.set(r as u8, col as u8, d.into());
+                        // self.data[r][col] = c.to_digit(10).map(|d| d as u8).unwrap().into();
+                    }
+                    _ => {}
                 }
+            }
         }
     }
 

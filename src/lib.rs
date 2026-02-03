@@ -1,7 +1,10 @@
-use std::{fmt::Display, num::NonZeroU8};
+use std::{
+    fmt::Display,
+    num::NonZeroU8,
+    ops::{Deref, DerefMut},
+};
 
 use crossterm::event::KeyModifiers;
-use itertools::Itertools;
 use ratatui::{
     DefaultTerminal, Frame,
     crossterm::event::{self, Event, KeyCode, KeyEventKind},
@@ -9,12 +12,11 @@ use ratatui::{
     style::{self, Color, Modifier, Style, Stylize},
     text::Text,
     widgets::{
-        Block, BorderType, Cell, HighlightSpacing, Paragraph, Row, Scrollbar, ScrollbarOrientation,
-        ScrollbarState, Table, TableState,
+        Block, BorderType, Cell, Paragraph, Row, Scrollbar, ScrollbarOrientation, ScrollbarState,
+        Table, TableState,
     },
 };
 use style::palette::tailwind;
-use unicode_width::UnicodeWidthStr;
 
 const PALETTES: [tailwind::Palette; 4] = [
     tailwind::BLUE,
@@ -76,43 +78,37 @@ impl Display for CellData {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match self.0 {
             Some(v) => write!(f, "{}", v),
-            None => write!(f, "0"),
+            None => write!(f, "·"),
         }
     }
 }
 
-type Arr9 = [CellData; 9];
-type Grid9x9 = [Arr9; 9];
+type SodukoRow = [CellData; 9];
 
-struct Data {
-    name: String,
-    address: String,
-    email: String,
-    row: Arr9,
+// struct Data {
+//     row: SodukoRow,
+// }
+
+#[derive(Default, Debug, Clone)]
+struct SodukoData([SodukoRow; 9]);
+
+impl Deref for SodukoData {
+    type Target = [SodukoRow; 9];
+
+    fn deref(&self) -> &Self::Target {
+        &self.0
+    }
 }
 
-impl Data {
-    const fn ref_array(&self) -> [&String; 3] {
-        [&self.name, &self.address, &self.email]
-    }
-
-    fn name(&self) -> &str {
-        &self.name
-    }
-
-    fn address(&self) -> &str {
-        &self.address
-    }
-
-    fn email(&self) -> &str {
-        &self.email
+impl DerefMut for SodukoData {
+    fn deref_mut(&mut self) -> &mut Self::Target {
+        &mut self.0
     }
 }
 
 pub struct App {
     state: TableState,
-    items: Vec<Data>,
-    longest_item_lens: (u16, u16, u16), // order is (name, address, email)
+    data: SodukoData,
     scroll_state: ScrollbarState,
     colors: TableColors,
     color_index: usize,
@@ -122,20 +118,18 @@ pub type Result = color_eyre::Result<()>;
 
 impl App {
     pub fn new() -> Self {
-        let data_vec = generate_fake_names();
         Self {
             state: TableState::default().with_selected(0),
-            longest_item_lens: constraint_len_calculator(&data_vec),
-            scroll_state: ScrollbarState::new((data_vec.len() - 1) * ITEM_HEIGHT),
+            scroll_state: ScrollbarState::new(9 + 2),
             colors: TableColors::new(&PALETTES[0]),
             color_index: 0,
-            items: data_vec,
+            data: SodukoData::default(),
         }
     }
     pub fn next_row(&mut self) {
         let i = match self.state.selected() {
             Some(i) => {
-                if i >= self.items.len() - 1 {
+                if i >= self.data.len() - 1 {
                     0
                 } else {
                     i + 1
@@ -151,7 +145,7 @@ impl App {
         let i = match self.state.selected() {
             Some(i) => {
                 if i == 0 {
-                    self.items.len() - 1
+                    self.data.len() - 1
                 } else {
                     i - 1
                 }
@@ -200,14 +194,18 @@ impl App {
                         }
                         KeyCode::Char('l') | KeyCode::Right => self.next_column(),
                         KeyCode::Char('h') | KeyCode::Left => self.previous_column(),
+                        KeyCode::Backspace | KeyCode::Delete => {
+                            let Some((r, col)) = self.state.selected_cell() else {
+                                continue;
+                            };
+                            self.data[r][col] = 0.into();
+                        }
                         KeyCode::Char(c) if c.is_digit(10) => {
                             let Some((r, col)) = self.state.selected_cell() else {
                                 continue;
                             };
-                            self.items[r].row[col] =
-                                c.to_digit(10).map(|d| d as u8).unwrap().into();
+                            self.data[r][col] = c.to_digit(10).map(|d| d as u8).unwrap().into();
                         }
-
                         _ => {}
                     }
                 }
@@ -239,9 +237,6 @@ impl App {
     }
 
     fn render_table(&mut self, frame: &mut Frame, area: Rect) {
-        let header_style = Style::default()
-            .fg(self.colors.header_fg)
-            .bg(self.colors.header_bg);
         let selected_row_style = Style::default()
             .add_modifier(Modifier::REVERSED)
             .fg(self.colors.selected_row_style_fg);
@@ -250,7 +245,7 @@ impl App {
             .add_modifier(Modifier::REVERSED)
             .fg(self.colors.selected_cell_style_fg);
 
-        let rows = self.items.iter().enumerate().map(|(r, data)| {
+        let rows = self.data.iter().enumerate().map(|(r, data)| {
             let color = match r % 2 {
                 0 => self.colors.normal_row_color,
                 _ => self.colors.alt_row_color,
@@ -263,8 +258,7 @@ impl App {
             } else {
                 base_style
             };
-            data.row
-                .into_iter()
+            data.into_iter()
                 .enumerate()
                 .map(|(col, content)| {
                     let mut text = Text::from(format!("{content}"));
@@ -283,14 +277,9 @@ impl App {
                 .style(style)
                 .height(if underline { 2 } else { 1 })
         });
-        let bar = " █ ";
         let t = Table::new(
             rows,
             [
-                // + 1 is for padding.
-                // Constraint::Length(self.longest_item_lens.0 + 1),
-                // Constraint::Min(self.longest_item_lens.1 + 1),
-                // Constraint::Min(self.longest_item_lens.2),
                 Constraint::Length(4),
                 Constraint::Length(4),
                 Constraint::Length(4),
@@ -320,6 +309,7 @@ impl App {
         frame.render_stateful_widget(t, area, &mut self.state);
     }
 
+    #[allow(dead_code)]
     fn render_scrollbar(&mut self, frame: &mut Frame, area: Rect) {
         frame.render_stateful_widget(
             Scrollbar::default()
@@ -368,83 +358,5 @@ impl App {
     }
 }
 
-fn generate_fake_names() -> Vec<Data> {
-    use fakeit::{address, contact, name};
-
-    (1..=9)
-        .map(|_| {
-            let name = name::full();
-            let address = format!(
-                "{}\n{}, {} {}",
-                address::street(),
-                address::city(),
-                address::state(),
-                address::zip()
-            );
-            let email = contact::email();
-
-            Data {
-                name,
-                address,
-                email,
-                row: Arr9::default(),
-            }
-        })
-        .sorted_by(|a, b| a.name.cmp(&b.name))
-        .collect()
-}
-
-fn constraint_len_calculator(items: &[Data]) -> (u16, u16, u16) {
-    let name_len = items
-        .iter()
-        .map(Data::name)
-        .map(UnicodeWidthStr::width)
-        .max()
-        .unwrap_or(0);
-    let address_len = items
-        .iter()
-        .map(Data::address)
-        .flat_map(str::lines)
-        .map(UnicodeWidthStr::width)
-        .max()
-        .unwrap_or(0);
-    let email_len = items
-        .iter()
-        .map(Data::email)
-        .map(UnicodeWidthStr::width)
-        .max()
-        .unwrap_or(0);
-
-    #[allow(clippy::cast_possible_truncation)]
-    (name_len as u16, address_len as u16, email_len as u16)
-}
-
 #[cfg(test)]
-mod tests {
-    use crate::{Arr9, Data};
-
-    #[test]
-    fn constraint_len_calculator() {
-        let test_data = vec![
-            Data {
-                name: "Emirhan Tala".to_string(),
-                address: "Cambridgelaan 6XX\n3584 XX Utrecht".to_string(),
-                email: "tala.emirhan@gmail.com".to_string(),
-                row: Arr9::default(),
-            },
-            Data {
-                name: "thistextis26characterslong".to_string(),
-                address: "this line is 31 characters long\nbottom line is 33 characters long"
-                    .to_string(),
-                email: "thisemailis40caharacterslong@ratatui.com".to_string(),
-                row: Arr9::default(),
-            },
-        ];
-        let (longest_name_len, longest_address_len, longest_email_len) =
-            crate::constraint_len_calculator(&test_data);
-
-        assert_eq!(26, longest_name_len);
-        assert_eq!(33, longest_address_len);
-        assert_eq!(40, longest_email_len);
-    }
-}
+mod tests {}

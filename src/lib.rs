@@ -22,9 +22,13 @@ const PALETTES: [tailwind::Palette; 4] = [
     tailwind::RED,
     tailwind::INDIGO,
 ];
-const INFO_TEXT: [&str; 2] = [
+const INFO_TEXT: [&str; 6] = [
     "(Esc) quit | (↑) move up | (↓) move down | (←) move left | (→) move right",
-    "(Shift + →) next color | (Shift + ←) previous color",
+    "Write numbers 1-9 in cells",
+    "(Backspace, Delete, 0) erease cell",
+    "('c' or Enter) check if solvable",
+    "(s) to solve if possible",
+    "(n) to clear all cells",
 ];
 
 const ITEM_HEIGHT: usize = 4;
@@ -164,19 +168,16 @@ impl App {
             if let Event::Key(key) = event::read()?
                 && key.kind == KeyEventKind::Press
             {
-                let shift_pressed = key.modifiers.contains(KeyModifiers::SHIFT);
                 match key.code {
                     KeyCode::Enter | KeyCode::Char('c') => self.check(),
                     KeyCode::Char('a') => self.auto_check = !self.auto_check,
                     KeyCode::Char('q') | KeyCode::Esc => return Ok(()),
                     KeyCode::Char('j') | KeyCode::Down => self.next_row(),
                     KeyCode::Char('k') | KeyCode::Up => self.previous_row(),
-                    KeyCode::Char('l') | KeyCode::Right if shift_pressed => self.next_color(),
-                    KeyCode::Char('h') | KeyCode::Left if shift_pressed => {
-                        self.previous_color();
-                    }
                     KeyCode::Char('l') | KeyCode::Right => self.next_column(),
                     KeyCode::Char('h') | KeyCode::Left => self.previous_column(),
+                    KeyCode::Char('s') => self.solve(),
+                    KeyCode::Char('n') => self.clear(),
                     KeyCode::Backspace | KeyCode::Delete => {
                         let Some((r, col)) = self.state.selected_cell() else {
                             continue;
@@ -335,7 +336,13 @@ impl App {
         );
     }
     fn render_footer(&self, frame: &mut Frame, area: Rect) {
-        let info_footer = Paragraph::new(Text::from_iter(INFO_TEXT))
+        let mut text = Text::from_iter(INFO_TEXT);
+        if self.auto_check {
+            text.push_line("(a) to toggle auto check off");
+        } else {
+            text.push_line("(a) to toggle auto check on");
+        };
+        let info_footer = Paragraph::new(text)
             .style(
                 Style::new()
                     .fg(self.colors.row_fg)
@@ -348,6 +355,19 @@ impl App {
                     .border_style(Style::new().fg(self.colors.footer_border_color)),
             );
         frame.render_widget(info_footer, area);
+    }
+
+    fn solve(&mut self) {
+        let Some(solution) = self.data.solve() else {
+            self.bad_color();
+            return;
+        };
+        self.data = solution;
+    }
+
+    fn clear(&mut self) {
+        self.data = BoardState::default();
+        self.neautral_color();
     }
 }
 

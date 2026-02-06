@@ -1000,18 +1000,6 @@ dependencies = [
 ]
 
 [[package]]
-name = "ratapp"
-version = "0.1.0"
-dependencies = [
- "color-eyre",
- "crossterm",
- "fakeit",
- "itertools 0.14.0",
- "ratatui",
- "unicode-width",
-]
-
-[[package]]
 name = "ratatui"
 version = "0.30.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -1133,6 +1121,18 @@ name = "regex-syntax"
 version = "0.8.8"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "7a2d987857b319362043e95f5353c0535c1f58eec5336fdfcf626430af7def58"
+
+[[package]]
+name = "rudoku"
+version = "0.1.0"
+dependencies = [
+ "color-eyre",
+ "crossterm",
+ "fakeit",
+ "itertools 0.14.0",
+ "ratatui",
+ "unicode-width",
+]
 
 [[package]]
 name = "rustc-demangle"

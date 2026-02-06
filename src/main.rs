@@ -1,4 +1,4 @@
-use ratapp::{App, Result};
+use rudoku::{App, Result};
 
 fn main() -> Result {
     color_eyre::install()?;

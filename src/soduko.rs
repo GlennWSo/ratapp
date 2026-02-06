@@ -4,6 +4,8 @@ use std::{
     ops::{Deref, DerefMut},
 };
 
+use itertools::Itertools;
+
 #[derive(Default, Debug, Clone, Copy)]
 pub struct CellState(Option<NonZeroU8>);
 impl Deref for CellState {
@@ -39,13 +41,13 @@ impl Display for CellState {
     }
 }
 
-type SodukoRow = [CellState; 9];
+type Soduko9 = [CellState; 9];
 
 #[derive(Default, Debug, Clone, Copy)]
-pub struct BoardState([SodukoRow; 9]);
+pub struct BoardState([Soduko9; 9]);
 
 impl Deref for BoardState {
-    type Target = [SodukoRow; 9];
+    type Target = [Soduko9; 9];
 
     fn deref(&self) -> &Self::Target {
         &self.0
@@ -68,7 +70,7 @@ fn unique(data: &[CellState]) -> bool {
 }
 
 impl BoardState {
-    fn square(&self, row: usize, col: usize) -> SodukoRow {
+    fn square(&self, row: usize, col: usize) -> Soduko9 {
         let rows = row..(row + 3);
         let data: Vec<_> = rows
             .flat_map(|row| {
@@ -90,8 +92,11 @@ impl BoardState {
         true
     }
 
-    fn column(&self, column: usize) -> Box<[CellState]> {
-        (0..9).map(|row| self.0[row][column]).collect()
+    fn column(&self, column: usize) -> Soduko9 {
+        (0..9)
+            .map(|row| self.0[row][column])
+            .collect_array()
+            .unwrap()
     }
     fn check_columns(&self) -> bool {
         (0..9).all(|col| unique(&self.column(col)))
@@ -99,7 +104,7 @@ impl BoardState {
     fn check_rows(&self) -> bool {
         (0..9).all(|i| unique(&self.0[i]))
     }
-    fn check(&self) -> bool {
+    pub fn check(&self) -> bool {
         self.check_rows() && self.check_columns() && self.check_boxes()
     }
     fn next_cell(&self) -> Option<usize> {
@@ -137,6 +142,9 @@ impl BoardState {
             }
         }
         None
+    }
+    pub fn solvable(&self) -> bool {
+        self.solve().is_some()
     }
 }
 

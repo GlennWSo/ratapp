@@ -19,8 +19,8 @@ use crate::soduko::BoardState;
 const PALETTES: [tailwind::Palette; 4] = [
     tailwind::BLUE,
     tailwind::EMERALD,
-    tailwind::INDIGO,
     tailwind::RED,
+    tailwind::INDIGO,
 ];
 const INFO_TEXT: [&str; 2] = [
     "(Esc) quit | (↑) move up | (↓) move down | (←) move left | (→) move right",
@@ -66,6 +66,7 @@ pub struct App {
     scroll_state: ScrollbarState,
     colors: TableColors,
     color_index: usize,
+    auto_check: bool,
 }
 
 pub type Result = color_eyre::Result<()>;
@@ -84,6 +85,7 @@ impl App {
             colors: TableColors::new(&PALETTES[0]),
             color_index: 0,
             data: SodukoData::default(),
+            auto_check: false,
         }
     }
     pub fn next_row(&mut self) {
@@ -133,8 +135,26 @@ impl App {
         self.color_index = (self.color_index + count - 1) % count;
     }
 
-    pub fn set_colors(&mut self) {
+    fn set_colors(&mut self) {
         self.colors = TableColors::new(&PALETTES[self.color_index]);
+    }
+
+    fn good_color(&mut self) {
+        self.color_index = 1;
+    }
+    fn neautral_color(&mut self) {
+        self.color_index = 0;
+    }
+    fn bad_color(&mut self) {
+        self.color_index = 2;
+    }
+
+    fn check(&mut self) {
+        if self.data.solvable() {
+            self.good_color();
+        } else {
+            self.bad_color();
+        }
     }
 
     pub fn run(mut self, mut terminal: DefaultTerminal) -> Result {
@@ -146,6 +166,8 @@ impl App {
             {
                 let shift_pressed = key.modifiers.contains(KeyModifiers::SHIFT);
                 match key.code {
+                    KeyCode::Enter | KeyCode::Char('c') => self.check(),
+                    KeyCode::Char('a') => self.auto_check = !self.auto_check,
                     KeyCode::Char('q') | KeyCode::Esc => return Ok(()),
                     KeyCode::Char('j') | KeyCode::Down => self.next_row(),
                     KeyCode::Char('k') | KeyCode::Up => self.previous_row(),
@@ -160,6 +182,11 @@ impl App {
                             continue;
                         };
                         self.data.set(r as u8, col as u8, 0.into());
+                        if self.auto_check {
+                            self.check();
+                        } else {
+                            self.neautral_color();
+                        }
                     }
                     KeyCode::Char(c) if c.is_ascii_digit() => {
                         let Some((r, col)) = self.state.selected_cell() else {
@@ -167,7 +194,11 @@ impl App {
                         };
                         let d = c.to_digit(10).unwrap() as u8;
                         self.data.set(r as u8, col as u8, d.into());
-                        // self.data[r][col] = c.to_digit(10).map(|d| d as u8).unwrap().into();
+                        if self.auto_check {
+                            self.check();
+                        } else {
+                            self.neautral_color();
+                        }
                     }
                     _ => {}
                 }

@@ -1,6 +1,6 @@
 use std::{
     fmt::{Display, Formatter},
-    num::{NonZero, NonZeroU8},
+    num::NonZeroU8,
     ops::{Deref, DerefMut},
 };
 
@@ -61,7 +61,7 @@ impl DerefMut for BoardState {
 }
 
 fn unique(data: &[CellState]) -> bool {
-    for n in (1..=9).map(|n| NonZeroU8::new(n)) {
+    for n in (1..=9).map(NonZeroU8::new) {
         if data.iter().filter(|v| ***v == n).count() > 1 {
             return false;
         }
@@ -135,7 +135,7 @@ impl BoardState {
         let Some(next_cell) = self.next_cell() else {
             return Some(self);
         };
-        for number in (1..=9) {
+        for number in 1..=9 {
             self.set_pos(next_cell, number.into());
             if let Some(solution) = self.solve() {
                 return Some(solution);

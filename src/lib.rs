@@ -1,6 +1,5 @@
 mod soduko;
 
-use crossterm::event::KeyModifiers;
 use ratatui::{
     DefaultTerminal, Frame,
     crossterm::event::{self, Event, KeyCode, KeyEventKind},

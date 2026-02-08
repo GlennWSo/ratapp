@@ -6,6 +6,10 @@ use std::{
 
 use itertools::Itertools;
 
+use bitmaps::Bitmap;
+
+type Bit9 = Bitmap<9>;
+
 #[derive(Default, Debug, Clone, Copy)]
 pub struct CellState(Option<NonZeroU8>);
 impl Deref for CellState {
@@ -104,9 +108,6 @@ impl BoardState {
     fn check_rows(&self) -> bool {
         (0..9).all(|i| unique(&self.0[i]))
     }
-    pub fn check(&self) -> bool {
-        self.check_rows() && self.check_columns() && self.check_boxes()
-    }
     fn next_cell(&self) -> Option<usize> {
         self.0
             .iter()
@@ -117,6 +118,15 @@ impl BoardState {
                 None => Some(idx),
             })
             .next()
+    }
+
+    /// check if number not in row
+    fn check_num_in_rows(&self, row: usize, num: NonZeroU8) -> bool {
+        self[row].into_iter().filter_map(|c| c.0).all(|c| c != num)
+    }
+
+    pub fn check(&self) -> bool {
+        self.check_rows() && self.check_columns() && self.check_boxes()
     }
     pub fn set(&mut self, row: u8, col: u8, n: CellState) {
         self.0[row as usize][col as usize] = n;

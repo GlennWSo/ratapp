@@ -1,14 +1,20 @@
 mod soduko;
 
-use ratatui::{
-    DefaultTerminal, Frame,
-    crossterm::event::{self, Event, KeyCode, KeyEventKind},
-    layout::{Constraint, Layout, Margin, Rect},
-    style::{self, Color, Modifier, Style, Stylize},
-    text::Text,
-    widgets::{
-        Block, BorderType, Cell, Paragraph, Row, Scrollbar, ScrollbarOrientation, ScrollbarState,
-        Table, TableState,
+// use ratatui::Terminal;
+use ratzilla::{
+    DomBackend, WebRenderer,
+    event::{KeyCode, KeyEvent},
+    ratatui::{
+        Frame,
+        Terminal,
+        // crossterm::event::{self, Event, KeyCode, KeyEventKind},
+        layout::{Constraint, Layout, Margin, Rect},
+        style::{self, Color, Modifier, Style, Stylize},
+        text::Text,
+        widgets::{
+            Block, BorderType, Cell, Paragraph, Row, Scrollbar, ScrollbarOrientation,
+            ScrollbarState, Table, TableState,
+        },
     },
 };
 use style::palette::tailwind;
@@ -79,6 +85,8 @@ impl Default for App {
         Self::new()
     }
 }
+
+type WebTerminal = Terminal<DomBackend>;
 
 impl App {
     pub fn new() -> Self {
@@ -160,53 +168,45 @@ impl App {
         }
     }
 
-    pub fn run(mut self, mut terminal: DefaultTerminal) -> Result {
-        loop {
-            terminal.draw(|frame| self.draw(frame))?;
-
-            if let Event::Key(key) = event::read()?
-                && key.kind == KeyEventKind::Press
-            {
-                match key.code {
-                    KeyCode::Enter | KeyCode::Char('c') => self.check(),
-                    KeyCode::Char('a') => self.auto_check = !self.auto_check,
-                    KeyCode::Char('q') | KeyCode::Esc => return Ok(()),
-                    KeyCode::Char('j') | KeyCode::Down => self.next_row(),
-                    KeyCode::Char('k') | KeyCode::Up => self.previous_row(),
-                    KeyCode::Char('l') | KeyCode::Right => self.next_column(),
-                    KeyCode::Char('h') | KeyCode::Left => self.previous_column(),
-                    KeyCode::Char('s') => self.solve(),
-                    KeyCode::Char('n') => self.clear(),
-                    KeyCode::Backspace | KeyCode::Delete => {
-                        let Some((r, col)) = self.state.selected_cell() else {
-                            continue;
-                        };
-                        self.data.set(r as u8, col as u8, 0.into());
-                        if self.auto_check {
-                            self.check();
-                        } else {
-                            self.neautral_color();
-                        }
-                    }
-                    KeyCode::Char(c) if c.is_ascii_digit() => {
-                        let Some((r, col)) = self.state.selected_cell() else {
-                            continue;
-                        };
-                        let d = c.to_digit(10).unwrap() as u8;
-                        self.data.set(r as u8, col as u8, d.into());
-                        if self.auto_check {
-                            self.check();
-                        } else {
-                            self.neautral_color();
-                        }
-                    }
-                    _ => {}
+    pub fn handle_key(&mut self, event: KeyEvent) {
+        match event.code {
+            KeyCode::Enter | KeyCode::Char('c') => self.check(),
+            KeyCode::Char('a') => self.auto_check = !self.auto_check,
+            // KeyCode::Char('q') | KeyCode::Esc => return Ok(()),
+            KeyCode::Char('j') | KeyCode::Down => self.next_row(),
+            KeyCode::Char('k') | KeyCode::Up => self.previous_row(),
+            KeyCode::Char('l') | KeyCode::Right => self.next_column(),
+            KeyCode::Char('h') | KeyCode::Left => self.previous_column(),
+            KeyCode::Char('s') => self.solve(),
+            KeyCode::Char('n') => self.clear(),
+            KeyCode::Backspace | KeyCode::Delete => {
+                let Some((r, col)) = self.state.selected_cell() else {
+                    return;
+                };
+                self.data.set(r as u8, col as u8, 0.into());
+                if self.auto_check {
+                    self.check();
+                } else {
+                    self.neautral_color();
                 }
             }
+            KeyCode::Char(c) if c.is_ascii_digit() => {
+                let Some((r, col)) = self.state.selected_cell() else {
+                    return;
+                };
+                let d = c.to_digit(10).unwrap() as u8;
+                self.data.set(r as u8, col as u8, d.into());
+                if self.auto_check {
+                    self.check();
+                } else {
+                    self.neautral_color();
+                }
+            }
+            _ => {}
         }
     }
 
-    fn draw(&mut self, frame: &mut Frame) {
+    pub fn draw(&mut self, frame: &mut Frame) {
         let vertical = Layout::vertical([
             Constraint::Fill(1),
             Constraint::Length(9 + 2 + 2),
